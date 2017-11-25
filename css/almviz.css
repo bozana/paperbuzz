@@ -95,6 +95,19 @@
 	vertical-align: middle;
 }
 
+.alm-icon {
+	font-size: 1.15em;
+	padding-bottom: 0.4em;
+	padding-top: 0.4em;
+	padding-right: 0.4em;
+	font-weight: bold;
+	vertical-align: middle;
+}
+
+.alm-category-poweredBy-info {
+	font-size: 0.75em;
+}
+
 .alm-control {
 	text-decoration: underline;
 	color: blue;

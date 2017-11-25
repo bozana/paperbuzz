@@ -3,12 +3,12 @@
 /**
  * @file plugins/generic/alm/SettingsForm.inc.php
  *
- * Copyright (c) 2013-2015 Simon Fraser University Library
- * Copyright (c) 2003-2015 John Willinsky
+ * Copyright (c) 2013-2017 Simon Fraser University Library
+ * Copyright (c) 2003-2017 John Willinsky
  * Distributed under the GNU GPL v2. For full terms see the file docs/COPYING.
  *
  * @class SettingsForm
- * @ingroup plugins_generic_almPlugin
+ * @ingroup plugins_generic_alm
  *
  * @brief Form for journal managers to modify ALM plugin settings
  */
@@ -38,34 +38,30 @@ class SettingsForm extends Form {
 	}
 
 	/**
-	 * Initialize form data.
+	 * @copydoc Form::initData()
 	 */
 	function initData() {
 		$journalId = $this->journalId;
 		$plugin =& $this->plugin;
-
-		$this->setData('apiKey', $plugin->getSetting($journalId, 'apiKey'));
-		$this->setData('depositArticles', $plugin->getSetting(CONTEXT_ID_NONE, 'depositArticles'));
-		$this->setData('depositUrl', $plugin->getSetting(CONTEXT_ID_NONE, 'depositUrl'));
+		$this->setData('apiEmail', $plugin->getSetting($journalId, 'apiEmail'));
 	}
 
 	/**
-	 * Assign form data to user-submitted data.
+	 * @copydoc Form::readInputData()
 	 */
 	function readInputData() {
-		$this->readUserVars(array('apiKey', 'depositArticles', 'depositUrl'));
+		$this->readUserVars(array('apiEmail'));
 	}
 
 	/**
 	 * Save settings.
+	 * @copydoc Form::execute()
 	 */
 	function execute() {
 		$plugin =& $this->plugin;
 		$journalId = $this->journalId;
 
-		$plugin->updateSetting($journalId, 'apiKey', $this->getData('apiKey'));
-		$plugin->updateSetting(CONTEXT_ID_NONE, 'depositArticles', $this->getData('depositArticles'));
-		$plugin->updateSetting(CONTEXT_ID_NONE, 'depositUrl', $this->getData('depositUrl'));
+		$plugin->updateSetting($journalId, 'apiEmail', $this->getData('apiEmail'));
 	}
 }
 

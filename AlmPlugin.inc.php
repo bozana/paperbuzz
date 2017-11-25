@@ -3,8 +3,8 @@
 /**
  * @file plugins/generic/alm/AlmPlugin.inc.php
  *
- * Copyright (c) 2013-2015 Simon Fraser University Library
- * Copyright (c) 2003-2015 John Willinsky
+ * Copyright (c) 2013-2017 Simon Fraser University Library
+ * Copyright (c) 2003-2017 John Willinsky
  * Distributed under the GNU GPL v2. For full terms see the file docs/COPYING.
  *
  * @class AlmPlugin
@@ -17,13 +17,12 @@ import('lib.pkp.classes.plugins.GenericPlugin');
 import('lib.pkp.classes.webservice.WebService');
 import('lib.pkp.classes.core.JSONManager');
 
-DEFINE('ALM_BASE_URL', 'http://pkp-alm.lib.sfu.ca/');
-DEFINE('ALM_API_URL', 'http://pkp-alm.lib.sfu.ca/api/v3/articles/');
+DEFINE('PAPERBUZZ_API_URL', 'https://api.paperbuzz.org/v0/');
 
 class AlmPlugin extends GenericPlugin {
 
 	/** @var $apiKey string */
-	var $_apiKey;
+	var $_apiEmail;
 
 
 	/**
@@ -39,10 +38,9 @@ class AlmPlugin extends GenericPlugin {
 		$context = $router->getContext($request);
 
 		if ($success && $context) {
-			$this->_apiKey = $this->getSetting($context->getId(), 'apiKey');
+			$this->_apiEmail = $this->getSetting($context->getId(), 'apiEmail');
 			HookRegistry::register('TemplateManager::display',array(&$this, 'templateManagerCallback'));
 			HookRegistry::register('Templates::Article::MoreInfo',array(&$this, 'articleMoreInfoCallback'));
-			HookRegistry::register('AcronPlugin::parseCronTab', array(&$this, 'callbackParseCronTab'));
 		}
 		return $success;
 	}
@@ -139,6 +137,7 @@ class AlmPlugin extends GenericPlugin {
 
 				$templateMgr->addStyleSheet($baseImportPath . 'css/bootstrap.tooltip.min.css');
 				$templateMgr->addStyleSheet($baseImportPath . 'css/almviz.css');
+				$templateMgr->addStyleSheet('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css');
 			}
 		}
 	}
@@ -146,8 +145,8 @@ class AlmPlugin extends GenericPlugin {
 	/**
 	 * Template manager filter callback. Adds the article
 	 * level metrics markup, if any stats.
-	 * @param $output string The rendered page markup.
-	 * @param $smarty Smarty
+	 * @param $hookName string
+	 * @param $params array
 	 * @return boolean
 	 */
 	function articleMoreInfoCallback($hookName, $params) {
@@ -162,19 +161,15 @@ class AlmPlugin extends GenericPlugin {
 		// We use a helper method to aggregate stats instead of retrieving the needed
 		// aggregation directly from metrics DAO because we need a custom array format.
 		list($totalHtml, $totalPdf, $byMonth, $byYear) = $this->_aggregateDownloadStats($downloadStats);
-		$downloadJson = $this->_buildDownloadStatsJson($totalHtml, $totalPdf, $byMonth, $byYear);
-		$almStatsJson = $this->_getAlmStats($article);
+		$downloadJsonDecoded = $this->_buildDownloadStatsJsonDecoded($totalHtml, $totalPdf, $byMonth, $byYear);
 
-		$json = @json_decode($almStatsJson); // to be used to check for errors
-		if (!$almStatsJson || property_exists($json, 'error') || !(is_array($json) && property_exists($json[0], 'doi'))) {
-			// The ALM stats answer comes with needed article info,
-			// so we build this information if no ALM stats response.
-			$almStatsJson = $this->_buildRequiredArticleInfoJson($article);
-		}
+		$almStatsJson = $this->_getAlmStats($article);
+		$almStatsJsonDecoded = @json_decode($almStatsJson);
+		/* TO-DO: error handling in Paperbuzz */
 
 		if ($downloadJson || $almStatsJson) {
-			if ($almStatsJson) $smarty->assign('almStatsJson', $almStatsJson);
-			if ($downloadJson) $smarty->assign('additionalStatsJson', $downloadJson);
+			$almStatsJsonPrepared = $this->_buildRequiredJson($article, $almStatsJsonDecoded, $downloadJsonDecoded);
+			$smarty->assign('almStatsJson', $almStatsJsonPrepared);
 
 			$baseImportPath = Request::getBaseUrl() . DIRECTORY_SEPARATOR . $this->getPluginPath() .
 				DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR;
@@ -198,17 +193,6 @@ class AlmPlugin extends GenericPlugin {
 		return $this->getPluginPath() . '/settings.xml';
 	}
 
-	/**
-	* @see AcronPlugin::parseCronTab()
-	*/
-	function callbackParseCronTab($hookName, $args) {
-		$taskFilesPath =& $args[0];
-		$taskFilesPath[] = $this->getPluginPath() . DIRECTORY_SEPARATOR . 'scheduledTasks.xml';
-
-		return false;
-	}
-
-
 	//
 	// Private helper methods.
 	//
@@ -225,7 +209,6 @@ class AlmPlugin extends GenericPlugin {
 			$params = array();
 		}
 
-		$params['api_key'] = $this->_apiKey;
 		$webServiceRequest = new WebServiceRequest($url, $params, $method);
 		// Can't strip slashes from the result, we have a JSON
 		// response with escaped characters.
@@ -241,7 +224,6 @@ class AlmPlugin extends GenericPlugin {
 	/**
 	* Cache miss callback.
 	* @param $cache Cache
-	* @param $articleId int
 	* @return JSON
 	*/
 	function _cacheMiss(&$cache) {
@@ -251,11 +233,13 @@ class AlmPlugin extends GenericPlugin {
 
 		// Construct the parameters to send to the web service
 		$searchParams = array(
-				'info' => 'history',
+			'email' => $this->_apiEmail,
 		);
 
 		// Call the web service (URL defined at top of this file)
-		$resultJson =& $this->_callWebService(ALM_API_URL . 'info:doi/' . $article->getPubId('doi'), $searchParams);
+		$resultJson =& $this->_callWebService(PAPERBUZZ_API_URL . 'doi/' . $article->getPubId('doi'), $searchParams);
+		// For teting use the following line instead of the line above and do not forget to clear the cache
+		//$resultJson =& $this->_callWebService(PAPERBUZZ_API_URL . 'doi/' . '10.1787/180d80ad-en', $searchParams);
 		if (!$resultJson) $resultJson = false;
 
 		$cache->setEntireCache($resultJson);
@@ -362,7 +346,7 @@ class AlmPlugin extends GenericPlugin {
 			}
 			$year = date('Y', strtotime($record[STATISTICS_DIMENSION_MONTH]. '01'));
 			$month = date('n', strtotime($record[STATISTICS_DIMENSION_MONTH] . '01'));
-			$yearMonth = date('Ym', strtotime($record[STATISTICS_DIMENSION_MONTH] . '01'));
+			$yearMonth = date('Y-m', strtotime($record[STATISTICS_DIMENSION_MONTH] . '01'));
 
 			if (!isset($byYear[$year])) $byYear[$year] = array();
 			if (!isset($byYear[$year][$fileType])) $byYear[$year][$fileType] = 0;
@@ -376,24 +360,15 @@ class AlmPlugin extends GenericPlugin {
 		return array($totalHtml, $totalPdf, $byMonth, $byYear);
 	}
 
-	/**
-	 * Get total statistics for JSON response.
-	 * @param $totalPdf int
-	 * @param $totalHtml int
-	 * @return array
-	 */
-	function _getStatsTotal($totalHtml, $totalPdf) {
-		$metrics = array('pdf' => $totalPdf, 'html' => $totalHtml);
-		return array_merge($metrics, $this->_getAlmMetricsTemplate());
-	}
 
 	/**
 	 * Get statistics by time dimension (month or year)
 	 * for JSON response.
-	 * @param array the download statistics in an array by dimension
-	 * @param string month | year
+	 * @param $data array the download statistics in an array (date => file type)
+	 * @param $dimension string month | year
+	 * @param $fileType STATISTICS_FILE_TYPE_PDF | STATISTICS_FILE_TYPE_HTML
 	 */
-	function _getStatsByTime($data, $dimension) {
+	function _getDownloadStatsByTime($data, $dimension, $fileType) {
 		switch ($dimension) {
 			case 'month':
 				$isMonthDimension = true;
@@ -408,49 +383,22 @@ class AlmPlugin extends GenericPlugin {
 		if (count($data)) {
 			$byTime = array();
 			foreach ($data as $date => $fileTypes) {
-				// strtotime sometimes fails on just a year (YYYY) (it treats it as a time (HH:mm))
-				// and sometimes on YYYYMM
-				// So make sure $date has all 3 parts
-				$date = str_pad($date, 8, "01");
-				$year = date('Y', strtotime($date));
 				if ($isMonthDimension) {
-					$month = date('n', strtotime($date));
+					$dateIndex = date('Y-m', strtotime($date));
+				} else {
+					$dateIndex = date('Y', strtotime($date));
 				}
-				$pdfViews = isset($fileTypes[STATISTICS_FILE_TYPE_PDF])? $fileTypes[STATISTICS_FILE_TYPE_PDF] : 0;
-				$htmlViews = isset($fileTypes[STATISTICS_FILE_TYPE_HTML])? $fileTypes[STATISTICS_FILE_TYPE_HTML] : 0;
-
-				$partialStats = array(
-					'year' => $year,
-					'pdf' => $pdfViews,
-					'html' => $htmlViews,
-					'total' => $pdfViews + $htmlViews
-				);
-
-				if ($isMonthDimension) {
-					$partialStats['month'] = $month;
+				if (isset($fileTypes[$fileType])) {
+					$event = new stdClass();
+					$event->count = $fileTypes[$fileType];
+					$event->date = $dateIndex;
+					$byTime[] = $event;
 				}
-
-				$byTime[] = array_merge($partialStats, $this->_getAlmMetricsTemplate());
 			}
 		} else {
 			$byTime = null;
 		}
-
 		return $byTime;
-	}
-
-	/**
-	 * Get template for ALM metrics JSON response.
-	 * @return array
-	 */
-	function _getAlmMetricsTemplate() {
-		return array(
-			'shares' => null,
-			'groups' => null,
-			'comments' => null,
-			'likes' => null,
-			'citations' => 0
-		);
 	}
 
 	/**
@@ -460,31 +408,41 @@ class AlmPlugin extends GenericPlugin {
 	 * @param $totalPdf array
 	 * @param $byMonth array
 	 * @param $byYear array
-	 * @return string JSON response
+	 * @return array ready for JSON encoding
 	 */
-	function _buildDownloadStatsJson($totalHtml, $totalPdf, $byMonth, $byYear) {
-		$response = array(
-			'name' => 'ojsViews',
-			'display_name' => __('plugins.generic.alm.thisJournal'),
-			'events_url' => null,
-			'metrics' => $this->_getStatsTotal($totalHtml, $totalPdf),
-			'by_day' => null,
-			'by_month' => $this->_getStatsByTime($byMonth, 'month'),
-			'by_year' => $this->_getStatsByTime($byYear, 'year')
-		);
+	function _buildDownloadStatsJsonDecoded($totalHtml, $totalPdf, $byMonth, $byYear) {
+		$eventPdf = new stdClass();
+		$eventPdf->events = null;
+		$eventPdf->events_count = $totalPdf;
+		$eventPdf->events_count_by_day = null;
+		$eventPdf->events_count_by_month = $this->_getDownloadStatsByTime($byMonth, 'month', STATISTICS_FILE_TYPE_PDF);;
+		$eventPdf->events_count_by_year = $this->_getDownloadStatsByTime($byYear, 'year', STATISTICS_FILE_TYPE_PDF);;
+		$eventPdf->source_id = 'pdf';
 
-		// Encode the object.
-		$jsonManager = new JSONManager();
-		return $jsonManager->encode($response);
+		$eventHtml = new stdClass();
+		$eventHtml->events = null;
+		$eventHtml->events_count = $totalHtml;
+		$eventHtml->events_count_by_day = null;
+		$eventHtml->events_count_by_month = $this->_getDownloadStatsByTime($byMonth, 'month', STATISTICS_FILE_TYPE_HTML);;
+		$eventHtml->events_count_by_year = $this->_getDownloadStatsByTime($byYear, 'year', STATISTICS_FILE_TYPE_HTML);;
+		$eventHtml->source_id = 'html';
+
+		$response = array(
+			'pdf' => array($eventPdf),
+			'html' =>  array($eventHtml)
+		);
+		return $response;
 	}
 
 	/**
 	 * Build the required article information for the
 	 * metrics visualization.
 	 * @param $article PublishedArticle
+	 * @param $eventsData array (optional) Decoded JSON result from Paperbuzz
+	 * @param $downloadData array (optional) Download stats data ready for JSON encoding
 	 * @return string JSON response
 	 */
-	function _buildRequiredArticleInfoJson($article) {
+	function _buildRequiredJson($article, $eventsData = null, $downloadData = null) {
 		if ($article->getDatePublished()) {
 			$datePublished = $article->getDatePublished();
 		} else {
@@ -493,13 +451,43 @@ class AlmPlugin extends GenericPlugin {
 			$issue =& $issueDao->getIssueByArticleId($article->getId(), $article->getJournalId());
 			$datePublished = $issue->getDatePublished();
 		}
-		$response = array(
-			array(
-				'publication_date' => date('c', strtotime($datePublished)),
-				'doi' => $article->getPubId('doi'),
-				'title' => $article->getLocalizedTitle(),
-				'sources' => array()
-		));
+		$metadata = array(
+			'publication_date' => date('c', strtotime($datePublished)),
+			'doi' => $article->getPubId('doi'),
+			'title' => $article->getLocalizedTitle(),
+		);
+
+		$events = array();
+		if ($eventsData) {
+			foreach ($eventsData->altmetrics_sources as $source) {
+				$eventsByDate = $source->events_count_by_day;
+				$byMonth = array();
+				$byYear = array();
+				foreach ($eventsByDate as $eventByDate) {
+					$date = $eventByDate->date;
+					$month = date('Y-m', strtotime($date));
+					$year = date('Y', strtotime($date));
+					$byMonth[$month] += $eventByDate->count;
+					$byYear[$year] += $eventByDate->count;
+				}
+				foreach ($byMonth as $date => $count) {
+					$event = new stdClass();
+					$event->count = $count;
+					$event->date = $date;
+					$source->events_count_by_month[] = $event;
+				}
+				foreach ($byYear as $date => $count) {
+					$event = new stdClass();
+					$event->count = $count;
+					$event->date = $date;
+					$source->events_count_by_year[] = $event;
+				}
+			}
+			$events = array('events' => $eventsData->altmetrics_sources);
+		}
+
+		$allData = array_merge($metadata, $events, $downloadData);
+		$response = array($allData);
 
 		$jsonManager = new JSONManager();
 		return $jsonManager->encode($response);

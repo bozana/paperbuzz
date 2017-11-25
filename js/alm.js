@@ -13,20 +13,26 @@ function AlmViz(options) {
 	// Init data
 	var categories_ = options.categories;
 	var data = options.almStatsJson;
-	var additionalStats = options.additionalStatsJson;
-	if (additionalStats) {
-		data[0].sources.push(additionalStats);
-	}
+	data = data[0];
+
+	// Icons for sources
+	var icons = {
+		'twitter': 'fa-twitter',
+		'reddit-links': 'fa-reddit'
+	};
+	// Display names for sources
+	var displayNames = {
+		'twitter': 'Twitter',
+		'reddit-links': 'Reddit'
+	};
 
 	// Init basic options
-	var baseUrl_ = options.baseUrl;
-	var hasIcon = options.hasIcon;
 	var minItems_ = options.minItemsToShowGraph;
 	var showTitle = options.showTitle;
 	var formatNumber_ = d3.format(",d");
 
 	// extract publication date
-	var pub_date = d3.time.format.iso.parse(data[0]["publication_date"]);
+	var pub_date = d3.time.format.iso.parse(data["publication_date"]);
 
 	var vizDiv;
 	// Get the Div where the viz should go (default to one with ID "alm')
@@ -42,6 +48,7 @@ function AlmViz(options) {
 	// to track if any metrics have been found
 	var metricsFound_;
 
+
 	/**
 	 * Initialize the visualization.
 	 * NB: needs to be accessible from the outside for initialization
@@ -51,16 +58,15 @@ function AlmViz(options) {
 
 		if (showTitle) {
 			vizDiv.append("a")
-				.attr('href', 'http://dx.doi.org/' + data[0].doi)
+				.attr('href', 'http://dx.doi.org/' + data["doi"])
 				.attr("class", "title")
-				.text(data[0].title);
+				.text(data["title"]);
 		}
 
 		// loop through categories
 		categories_.forEach(function(category) {
 			addCategory_(vizDiv, category, data);
 		});
-
 
 		if (!metricsFound_) {
 			vizDiv.append("p")
@@ -81,19 +87,21 @@ function AlmViz(options) {
 		var $categoryRow = false;
 
 		// Loop through sources to add statistics data to the category.
-		data[0]["sources"].forEach(function(source) {
-			var total = source.metrics[category.name];
-			if (total > 0) {
-				// Only add the category row the first time
-				if (!$categoryRow) {
-					$categoryRow = getCategoryRow_(canvas, category);
+		if (data[category.name]) {
+			data[category.name].forEach(function(source) {
+				var total = source.events_count;
+				// Display categories and sources only if there is an event/download
+				if (total > 0) {
+					// Flag that there is at least one metric
+					metricsFound_ = true;
+					// Only add the category row the first time
+					if (!$categoryRow) {
+						$categoryRow = getCategoryRow_(canvas, category);
+					}
+					addSource_(source, total, category, $categoryRow);
 				}
-
-				// Flag that there is at least one metric
-				metricsFound_ = true;
-				addSource_(source, total, category, $categoryRow);
-			}
-		});
+			});
+		}
 	};
 
 
@@ -124,6 +132,14 @@ function AlmViz(options) {
 
 		$(tooltip).tooltip({title: category.tooltip_text, container: 'body'});
 
+		if (category.name == 'events') {
+			categoryTitle.append("br");
+			poweredby = categoryTitle.append("div").attr("class", "alm-category-poweredBy-info").text("Metrics powered by ");
+			poweredbylink = poweredby.append("a").attr("href", "http://google.de");
+			poweredbylink.text("paperbuzz");
+			categoryTitle.append("br");
+		}
+
 		return categoryRow;
 	};
 
@@ -144,46 +160,28 @@ function AlmViz(options) {
 			.append("div")
 			.attr("class", "alm-row")
 			.attr("style", "float: left")
-			.attr("id", "alm-row-" + source.name + "-" + category.name);
+			.attr("id", "alm-row-" + source.source_id + "-" + category.name);
 
 		$countLabel = $row.append("div")
 			.attr("class", "alm-count-label");
 
-		if (hasIcon.indexOf(source.name) >= 0) {
-			$countLabel.append("img")
-				.attr("src", baseUrl_ + '/assets/' + source.name + '.png')
-				.attr("alt", 'a description of the source')
-				.attr("class", "label-img");
-		}
+		$icon = $countLabel.append("span").attr("class", "alm-icon")
+			.attr("id", "alm-count-" + source.source_id + "-icon");
+		$icon.append("i").attr("class", "fa " + icons[source.source_id]);
 
-		if (source.events_url) {
-			// if there is an events_url, we can link to it from the count
-			$count = $countLabel.append("a")
-				.attr("href", function(d) { return source.events_url; });
-		} else {
-			// if no events_url, we just put in the count
-			$count = $countLabel.append("span");
-		}
-
+		$count = $countLabel.append("span");
 		$count
 			.attr("class", "alm-count")
-			.attr("id", "alm-count-" + source.name + "-" + category.name)
+			.attr("id", "alm-count-" + source.source_id + "-" + category.name)
 			.text(formatNumber_(total));
 
 		$countLabel.append("br");
 
-		if (source.name == 'ojsViews') {
-			$countLabel.append("span")
-				.text(source.display_name);
-		} else {
-			// link the source name
-			$countLabel.append("a")
-				.attr("href", baseUrl_ + "/sources/" + source.name)
-				.text(source.display_name);
-		}
+		$countLabel.append("span").text(displayNames[source.source_id]);
 
 		// Only add a chart if the browser supports SVG and we have
 		// data by time dimension.
+		/*
 		level_data = getData_('year', source);
 		if (hasSVG_ && level_data && level_data[0].hasOwnProperty(category.name)) {
 			var level = false;
@@ -310,6 +308,7 @@ function AlmViz(options) {
 				$row.attr('style', "width: 100%");
 			};
 		};
+		*/
 
 		return $row;
 	};
