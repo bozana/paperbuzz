@@ -27,6 +27,8 @@
 	<message key="plugins.generic.alm.categories.html.description">Total number of HTML page views for this article. These views are recorded directly within the system itself. Overall monthly view counts may also be available.</message>
 	<message key="plugins.generic.alm.categories.pdf">PDF Views.</message>
 	<message key="plugins.generic.alm.categories.pdf.description">Total number of PDF views and downloads for this article. These views are recorded directly within the system itself. Overall monthly view counts may also be available.</message>
+	<message key="plugins.generic.alm.categories.other">Other Views.</message>
+	<message key="plugins.generic.alm.categories.other.description">Total number of all other galleys views and downloads for this article. These views are recorded directly within the system itself. Overall monthly view counts may also be available.</message>
 	<message key="plugins.generic.alm.categories.events">Event Data</message>
 	<message key="plugins.generic.alm.categories.events.description">Total number of interactions with this article beyond this publishing platform. Clicking on the altmetrics source will list the single events.</message>
 </locale>

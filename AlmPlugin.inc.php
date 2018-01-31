@@ -157,11 +157,13 @@ class AlmPlugin extends GenericPlugin {
 		assert(is_a($article, 'PublishedArticle'));
 		$articleId = $article->getId();
 
-		$downloadStats = $this->_getDownloadStats($request, $articleId);
+		$downloadStatsByMonth = $this->_getDownloadStats($request, $articleId);
+		$downloadStatsByDay = $this->_getDownloadStats($request, $articleId, true);
+
 		// We use a helper method to aggregate stats instead of retrieving the needed
 		// aggregation directly from metrics DAO because we need a custom array format.
-		list($totalHtml, $totalPdf, $byMonth, $byYear) = $this->_aggregateDownloadStats($downloadStats);
-		$downloadJsonDecoded = $this->_buildDownloadStatsJsonDecoded($totalHtml, $totalPdf, $byMonth, $byYear);
+		list($totalHtml, $totalPdf, $totalOther, $byDay, $byMonth, $byYear) = $this->_aggregateDownloadStats($downloadStatsByMonth, $downloadStatsByDay);
+		$downloadJsonDecoded = $this->_buildDownloadStatsJsonDecoded($totalHtml, $totalPdf, $totalOther, $byDay, $byMonth, $byYear);
 
 		$almStatsJson = $this->_getAlmStats($article);
 		$almStatsJsonDecoded = @json_decode($almStatsJson);
@@ -293,9 +295,10 @@ class AlmPlugin extends GenericPlugin {
 	 * Get download stats for the passed article id.
 	 * @param $request PKPRequest
 	 * @param $articleId int
+	 * @param $byDay boolean
 	 * @return array MetricsDAO::getMetrics() result.
 	 */
-	function _getDownloadStats(&$request, $articleId) {
+	function _getDownloadStats(&$request, $articleId, $byDay = false) {
 		// Pull in download stats for each article galley.
 		$request =& Application::getRequest();
 		$router =& $request->getRouter();
@@ -307,10 +310,20 @@ class AlmPlugin extends GenericPlugin {
 		PluginRegistry::loadCategory('reports');
 
 		// Always merge the old timed views stats with default metrics.
+		// TO-DO: Should we maybe consider only ojs::counter ?
+		$dateColumn = $byDay ? STATISTICS_DIMENSION_DAY : STATISTICS_DIMENSION_MONTH;
 		$metricTypes = array(OJS_METRIC_TYPE_TIMED_VIEWS, $context->getDefaultMetricType());
-		$columns = array(STATISTICS_DIMENSION_MONTH, STATISTICS_DIMENSION_FILE_TYPE);
+		$columns = array($dateColumn, STATISTICS_DIMENSION_FILE_TYPE);
 		$filter = array(STATISTICS_DIMENSION_ASSOC_TYPE => ASSOC_TYPE_GALLEY, STATISTICS_DIMENSION_SUBMISSION_ID => $articleId);
-		$orderBy = array(STATISTICS_DIMENSION_MONTH => STATISTICS_ORDER_ASC);
+		$orderBy = array($dateColumn => STATISTICS_ORDER_ASC);
+
+		// Consider only the last 30 days
+		if ($byDay) {
+			$startDate = date('Ymd', strtotime('-30 days'));
+			$endDate = date('Ymd');
+			$filter[STATISTICS_DIMENSION_DAY]['from'] = $startDate;
+			$filter[STATISTICS_DIMENSION_DAY]['to'] = $endDate;
+		}
 
 		return $metricsDao->getMetrics($metricTypes, $columns, $filter, $orderBy);
 	}
@@ -319,18 +332,20 @@ class AlmPlugin extends GenericPlugin {
 	 * Aggregate stats and return data in a format
 	 * that can be used to build the statistics JSON response
 	 * for the article page.
-	 * @param $stats array A _getDownloadStats return value.
+	 * @param $statsByMonth null|array A _getDownloadStats return value.
+	 * @param $statsByDay null|array A _getDownloadStats return value.
 	 * @return array
 	 */
-	function _aggregateDownloadStats($stats) {
+	function _aggregateDownloadStats($statsByMonth, $statsByDay) {
 		$totalHtml = 0;
 		$totalPdf = 0;
+		$totalOther = 0;
 		$byMonth = array();
 		$byYear = array();
 
 		if (!is_array($stats)) $stats = array();
 
-		foreach ($stats as $record) {
+		if ($statsByMonth) foreach ($statsByMonth as $record) {
 			$views = $record[STATISTICS_METRIC];
 			$fileType = $record[STATISTICS_DIMENSION_FILE_TYPE];
 			switch($fileType) {
@@ -339,6 +354,9 @@ class AlmPlugin extends GenericPlugin {
 					break;
 				case STATISTICS_FILE_TYPE_PDF:
 					$totalPdf += $views;
+					break;
+				case STATISTICS_FILE_TYPE_OTHER:
+					$totalOther += $views;
 					break;
 				default:
 					// switch is considered a loop for purposes of continue
@@ -357,7 +375,18 @@ class AlmPlugin extends GenericPlugin {
 			$byMonth[$yearMonth][$fileType] += $views;
 		}
 
-		return array($totalHtml, $totalPdf, $byMonth, $byYear);
+		// Get daily download statistics
+		$byDay = array();
+		if ($statsByDay) foreach ($statsByDay as $recordByDay) {
+			$views = $recordByDay[STATISTICS_METRIC];
+			$fileType = $recordByDay[STATISTICS_DIMENSION_FILE_TYPE];
+			$yearMonthDay = date('Y-m-d', strtotime($recordByDay[STATISTICS_DIMENSION_DAY]));
+			if (!isset($byDay[$yearMonthDay])) $byDay[$yearMonthDay] = array();
+			if (!isset($byDay[$yearMonthDay][$fileType])) $byDay[$yearMonthDay][$fileType] = 0;
+			$byDay[$yearMonthDay][$fileType] += $views;
+		}
+
+		return array($totalHtml, $totalPdf, $totalOther, $byDay, $byMonth, $byYear);
 	}
 
 
@@ -370,11 +399,14 @@ class AlmPlugin extends GenericPlugin {
 	 */
 	function _getDownloadStatsByTime($data, $dimension, $fileType) {
 		switch ($dimension) {
+			case 'day':
+				$isDayDimension = true;
+				break;
 			case 'month':
 				$isMonthDimension = true;
 				break;
 			case 'year':
-				$isMonthDimension = false;
+				$isYearDimension = false;
 				break;
 			default:
 				return null;
@@ -383,9 +415,11 @@ class AlmPlugin extends GenericPlugin {
 		if (count($data)) {
 			$byTime = array();
 			foreach ($data as $date => $fileTypes) {
-				if ($isMonthDimension) {
+				if ($isDayDimension) {
+					$dateIndex = date('Y-m-d', strtotime($date));
+				} elseif ($isMonthDimension) {
 					$dateIndex = date('Y-m', strtotime($date));
-				} else {
+				} elseif ($isYearDimension) {
 					$dateIndex = date('Y', strtotime($date));
 				}
 				if (isset($fileTypes[$fileType])) {
@@ -406,30 +440,40 @@ class AlmPlugin extends GenericPlugin {
 	 * on parameters returned from _aggregateStats().
 	 * @param $totalHtml array
 	 * @param $totalPdf array
+	 * @param $totalOther array
 	 * @param $byMonth array
 	 * @param $byYear array
 	 * @return array ready for JSON encoding
 	 */
-	function _buildDownloadStatsJsonDecoded($totalHtml, $totalPdf, $byMonth, $byYear) {
+	function _buildDownloadStatsJsonDecoded($totalHtml, $totalPdf, $totalOther, $byDay, $byMonth, $byYear) {
 		$eventPdf = new stdClass();
 		$eventPdf->events = null;
 		$eventPdf->events_count = $totalPdf;
-		$eventPdf->events_count_by_day = null;
-		$eventPdf->events_count_by_month = $this->_getDownloadStatsByTime($byMonth, 'month', STATISTICS_FILE_TYPE_PDF);;
-		$eventPdf->events_count_by_year = $this->_getDownloadStatsByTime($byYear, 'year', STATISTICS_FILE_TYPE_PDF);;
+		$eventPdf->events_count_by_day = $this->_getDownloadStatsByTime($byDay, 'day', STATISTICS_FILE_TYPE_PDF);
+		$eventPdf->events_count_by_month = $this->_getDownloadStatsByTime($byMonth, 'month', STATISTICS_FILE_TYPE_PDF);
+		$eventPdf->events_count_by_year = $this->_getDownloadStatsByTime($byYear, 'year', STATISTICS_FILE_TYPE_PDF);
 		$eventPdf->source_id = 'pdf';
 
 		$eventHtml = new stdClass();
 		$eventHtml->events = null;
 		$eventHtml->events_count = $totalHtml;
-		$eventHtml->events_count_by_day = null;
-		$eventHtml->events_count_by_month = $this->_getDownloadStatsByTime($byMonth, 'month', STATISTICS_FILE_TYPE_HTML);;
-		$eventHtml->events_count_by_year = $this->_getDownloadStatsByTime($byYear, 'year', STATISTICS_FILE_TYPE_HTML);;
+		$eventHtml->events_count_by_day = $this->_getDownloadStatsByTime($byDay, 'day', STATISTICS_FILE_TYPE_HTML);
+		$eventHtml->events_count_by_month = $this->_getDownloadStatsByTime($byMonth, 'month', STATISTICS_FILE_TYPE_HTML);
+		$eventHtml->events_count_by_year = $this->_getDownloadStatsByTime($byYear, 'year', STATISTICS_FILE_TYPE_HTML);
 		$eventHtml->source_id = 'html';
+
+		$eventOther = new stdClass();
+		$eventOther->events = null;
+		$eventOther->events_count = $totalOther;
+		$eventOther->events_count_by_day = $this->_getDownloadStatsByTime($byDay, 'day', STATISTICS_FILE_TYPE_OTHER);
+		$eventOther->events_count_by_month = $this->_getDownloadStatsByTime($byMonth, 'month', STATISTICS_FILE_TYPE_OTHER);
+		$eventOther->events_count_by_year = $this->_getDownloadStatsByTime($byYear, 'year', STATISTICS_FILE_TYPE_OTHER);
+		$eventOther->source_id = 'other';
 
 		$response = array(
 			'pdf' => array($eventPdf),
-			'html' =>  array($eventHtml)
+			'html' =>  array($eventHtml),
+			'other' => array($eventOther)
 		);
 		return $response;
 	}

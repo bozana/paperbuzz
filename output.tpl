@@ -28,6 +28,7 @@
 		{rdelim},
 		categories: [{ldelim} name: "html", display_name: '{translate key="plugins.generic.alm.categories.html"}', tooltip_text: '{translate key="plugins.generic.alm.categories.html.description"|escape:"jsparam"}' {rdelim},
 			{ldelim} name: "pdf", display_name: '{translate key="plugins.generic.alm.categories.pdf"}', tooltip_text: '{translate key="plugins.generic.alm.categories.pdf.description"|escape:"jsparam"}' {rdelim},
+			{ldelim} name: "other", display_name: '{translate key="plugins.generic.alm.categories.other"}', tooltip_text: '{translate key="plugins.generic.alm.categories.other.description"|escape:"jsparam"}' {rdelim},
 			{ldelim} name: "events", display_name: '{translate key="plugins.generic.alm.categories.events"}', tooltip_text: '{translate key="plugins.generic.alm.categories.events.description"|escape:"jsparam"}' {rdelim}],
 		vizDiv: "#alm"
 	{rdelim}
