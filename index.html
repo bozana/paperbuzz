@@ -1,0 +1,72 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html>
+	<head>
+		<meta charset="utf-8"/>
+		<script
+			  src="https://code.jquery.com/jquery-1.11.3.min.js"
+			  integrity="sha256-7LkWEzqTdpEfELxcZZlS6wAx5Ff13zZ83lYO2/ujj7g="
+			  crossorigin="anonymous">
+		</script>
+		
+		<script src="https://d3js.org/d3.v4.min.js"></script>
+		<!-- <script src="https://d3plus.org/js/d3plus-text.v0.9.full.min.js"></script> -->
+		<script type="text/javascript" src="d3-tip/index.js"></script>
+
+		<style>
+		body {
+			width: 800px;
+			font-family: arial
+		}
+		</style>
+
+		<link rel="stylesheet" type="text/css" href="css/paperbuzzviz.css" />
+    </head>
+	<body>
+	<h1>Paperbuzz Visualizations</h1>
+
+	<div id="paperbuzz"><div id="loading">Metrics Loading...</div></div>
+
+    <script type="text/javascript" src="paperbuzzviz.js"></script>
+	
+    <script type="text/javascript">
+		var options = {
+					minItemsToShowGraph: {
+							minEventsForYearly: 1,
+							minEventsForMonthly: 1,
+							minEventsForDaily: 1,
+							minYearsForYearly: 1,
+							minMonthsForMonthly: 1,
+							minDaysForDaily: 1 //first 30 days only
+							},
+					graphheight: 150,
+					graphwidth:  300,
+					showTitle: true,
+					showMini: true,
+					
+				}
+
+		var paperbuzzviz = undefined;
+		var doi = '10.1371/journal.pmed.0020124';
+
+		// var doi = '10.1007/s00266-017-0820-4';
+		// var doi = '10.7287/peerj.preprints.3119v1';
+		//d3.json('https://api.paperbuzz.org/v0/doi/' + doi, function(data) {
+		//d3.json('/home/bozana/pkp/ojs-stable/debug.json', function(data) {
+	alert("hm1");
+$.getJSON("debug.json", function (data) {
+	alert("hm2");
+   console.log(data);
+	options.paperbuzzStatsJson = data;
+	paperbuzzviz = new PaperbuzzViz(options);
+	paperbuzzviz.initViz();
+});			
+alert("hm3");
+				//options.paperbuzzStatsJson = json;
+				//paperbuzzviz = new PaperbuzzViz(options);
+				//paperbuzzviz.initViz();
+			//});
+	
+	</script>
+    <div id="built-with"><p>Built with <a href="http://d3js.org/">d3.js</a></p></div>
+	</body>
+</html>

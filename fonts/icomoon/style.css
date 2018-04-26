@@ -1,0 +1,69 @@
+@font-face {
+  font-family: 'icomoon';
+  src:  url('fonts/icomoon.eot?w4gzvf');
+  src:  url('fonts/icomoon.eot?w4gzvf#iefix') format('embedded-opentype'),
+    url('fonts/icomoon.ttf?w4gzvf') format('truetype'),
+    url('fonts/icomoon.woff?w4gzvf') format('woff'),
+    url('fonts/icomoon.svg?w4gzvf#icomoon') format('svg');
+  font-weight: normal;
+  font-style: normal;
+}
+
+[class^="icon-"], [class*=" icon-"] {
+  /* use !important to prevent issues with browser extensions that change fonts */
+  font-family: 'icomoon' !important;
+  speak: none;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+
+  /* Better Font Rendering =========== */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.icon-crossref:before {
+  content: "\e90c";
+}
+.icon-datacite:before {
+  content: "\e90b";
+}
+.icon-f1000:before {
+  content: "\e90a";
+}
+.icon-hypothesis:before {
+  content: "\e909";
+}
+.icon-cambia-lens:before {
+  content: "\e907";
+}
+.icon-stackexchange:before {
+  content: "\e908";
+  color: #1e5397;
+}
+.icon-reddit-links:before {
+  content: "\eac6";
+}
+.icon-web:before {
+  content: "\e903";
+}
+.icon-wikipedia:before {
+  content: "\e906";
+}
+.icon-newsfeed:before {
+  content: "\e905";
+}
+.icon-facebook:before {
+  content: "\e904";
+}
+.icon-reddit:before {
+  content: "\e902";
+}
+.icon-wordpressdotcom:before {
+  content: "\e901";
+}
+.icon-twitter:before {
+  content: "\e900";
+}

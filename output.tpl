@@ -11,39 +11,32 @@
 
 <div class="separator"></div>
 <a name="alm"></a>
-<h4>{translate key="plugins.generic.alm.title"}</h4>
-<div id="alm" class="alm"><div id="loading">{translate key="plugins.generic.alm.loading"}</div></div>
-<br />
-
+<h1>Paperbuzz Visualizations</h1>
+<div id="paperbuzz"><div id="loading">Metrics Loading...</div></div>
+<script type="text/javascript" src="{$paperbuzzvizPath}"></script>	
 <script type="text/javascript">
-	options = {ldelim}
-		almStatsJson: $.parseJSON('{$almStatsJson|escape:"javascript"}'),
+	var options = {ldelim}
+		paperbuzzStatsJson: $.parseJSON('{$almStatsJson|escape:"javascript"}'),
 		minItemsToShowGraph: {ldelim}
-			minEventsForYearly: 0,
-			minEventsForMonthly: 0,
-			minEventsForDaily: 0,
-			minYearsForYearly: 0,
-			minMonthsForMonthly: 0,
-			minDaysForDaily: 0
+			minEventsForYearly: 1,
+			minEventsForMonthly: 1,
+			minEventsForDaily: 1,
+			minYearsForYearly: 1,
+			minMonthsForMonthly: 1,
+			minDaysForDaily: 1 //first 30 days only
 		{rdelim},
-		categories: [{ldelim} name: "html", display_name: '{translate key="plugins.generic.alm.categories.html"}', tooltip_text: '{translate key="plugins.generic.alm.categories.html.description"|escape:"jsparam"}' {rdelim},
-			{ldelim} name: "pdf", display_name: '{translate key="plugins.generic.alm.categories.pdf"}', tooltip_text: '{translate key="plugins.generic.alm.categories.pdf.description"|escape:"jsparam"}' {rdelim},
-			{ldelim} name: "other", display_name: '{translate key="plugins.generic.alm.categories.other"}', tooltip_text: '{translate key="plugins.generic.alm.categories.other.description"|escape:"jsparam"}' {rdelim},
-			{ldelim} name: "events", display_name: '{translate key="plugins.generic.alm.categories.events"}', tooltip_text: '{translate key="plugins.generic.alm.categories.events.description"|escape:"jsparam"}' {rdelim}],
-		vizDiv: "#alm"
+		graphheight: 150,
+		graphwidth:  300,
+		showTitle: true,
+		showMini: true,
 	{rdelim}
 
-	// Import JQuery 1.10 version, needed for the tooltip plugin
-	// that we use below. jQuery.noConflict puts the old $ back.
-	$.getScript('{$jqueryImportPath}', function() {ldelim}
-		$.getScript('{$tooltipImportPath}', function() {ldelim}
-			// Assign the last inserted JQuery version to a new variable, to avoid
-			// conflicts with the current version in $ variable.
-			options.jQuery = $;
-			var almviz = new AlmViz(options);
-			almviz.initViz();
-			jQuery.noConflict(true);
-		{rdelim});
-	{rdelim});
-
+	var paperbuzzviz = undefined;
+	var doi = '10.1371/journal.pmed.0020124';		
+	// var doi = '10.1007/s00266-017-0820-4';
+	// var doi = '10.7287/peerj.preprints.3119v1';
+		
+	paperbuzzviz = new PaperbuzzViz(options);
+	paperbuzzviz.initViz();
 </script>
+<div id="built-with"><p>Built with <a href="http://d3js.org/">d3.js</a></p></div>

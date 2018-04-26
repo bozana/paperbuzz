@@ -128,16 +128,16 @@ class AlmPlugin extends GenericPlugin {
 				$baseImportPath = Request::getBaseUrl() . DIRECTORY_SEPARATOR . $this->getPluginPath() . DIRECTORY_SEPARATOR;
 				$scriptImportString = '<script language="javascript" type="text/javascript" src="';
 
-				$d3import = $scriptImportString . $baseImportPath .
-					'js/d3.v3.min.js"></script>';
-				$controllerImport = $scriptImportString . $baseImportPath .
-					'js/alm.js"></script>';
+				$jQueryImport = $scriptImportString . 'https://code.jquery.com/jquery-1.11.3.min.js" integrity="sha256-7LkWEzqTdpEfELxcZZlS6wAx5Ff13zZ83lYO2/ujj7g=" crossorigin="anonymous"></script>';
 
-				$templateMgr->assign('additionalHeadData', $additionalHeadData . "\n" . $d3import . "\n" . $controllerImport);
+				$d3import = $scriptImportString . 'https://d3js.org/d3.v4.min.js"></script>';
+				$d3tipImport = $scriptImportString . $baseImportPath .
+					'd3-tip/index.js"></script>';
 
-				$templateMgr->addStyleSheet($baseImportPath . 'css/bootstrap.tooltip.min.css');
-				$templateMgr->addStyleSheet($baseImportPath . 'css/almviz.css');
-				$templateMgr->addStyleSheet('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css');
+				$templateMgr->assign('additionalHeadData', $additionalHeadData . "\n" . $jQueryImport . "\n" . $d3import . "\n" . $d3tipImport);
+
+				$templateMgr->addStyleSheet($baseImportPath . 'css/paperbuzzviz.css');
+				//$templateMgr->addStyleSheet('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css');
 			}
 		}
 	}
@@ -169,17 +169,14 @@ class AlmPlugin extends GenericPlugin {
 		$almStatsJsonDecoded = @json_decode($almStatsJson);
 		/* TO-DO: error handling in Paperbuzz */
 
-		if ($downloadJson || $almStatsJson) {
-			$almStatsJsonPrepared = $this->_buildRequiredJson($article, $almStatsJsonDecoded, $downloadJsonDecoded);
+		if ($downloadJsonDecoded || $almStatsJsonDecoded) {
+			$almStatsJsonPrepared = $this->_buildRequiredJson($almStatsJsonDecoded, $downloadJsonDecoded);
+
 			$smarty->assign('almStatsJson', $almStatsJsonPrepared);
 
-			$baseImportPath = Request::getBaseUrl() . DIRECTORY_SEPARATOR . $this->getPluginPath() .
-				DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR;
-			$jqueryImportPath = $baseImportPath . 'jquery-1.10.2.min.js';
-			$tooltipImportPath = $baseImportPath . 'bootstrap.tooltip.min.js';
-
-			$smarty->assign('jqueryImportPath', $jqueryImportPath);
-			$smarty->assign('tooltipImportPath', $tooltipImportPath);
+			$baseImportPath = Request::getBaseUrl() . DIRECTORY_SEPARATOR . $this->getPluginPath() . DIRECTORY_SEPARATOR;
+			$paperbuzzvizPath = $baseImportPath . 'paperbuzzviz.js';
+			$smarty->assign('paperbuzzvizPath', $paperbuzzvizPath);
 
 			$metricsHTML = $smarty->fetch($this->getTemplatePath() . 'output.tpl');
 			$output .= $metricsHTML;
@@ -239,9 +236,10 @@ class AlmPlugin extends GenericPlugin {
 		);
 
 		// Call the web service (URL defined at top of this file)
-		$resultJson =& $this->_callWebService(PAPERBUZZ_API_URL . 'doi/' . $article->getPubId('doi'), $searchParams);
+		//$resultJson =& $this->_callWebService(PAPERBUZZ_API_URL . 'doi/' . $article->getPubId('doi'), $searchParams);
 		// For teting use the following line instead of the line above and do not forget to clear the cache
 		//$resultJson =& $this->_callWebService(PAPERBUZZ_API_URL . 'doi/' . '10.1787/180d80ad-en', $searchParams);
+		$resultJson =& $this->_callWebService(PAPERBUZZ_API_URL . 'doi/' . '10.1371/journal.pmed.0020124', $searchParams);
 		if (!$resultJson) $resultJson = false;
 
 		$cache->setEntireCache($resultJson);
@@ -317,13 +315,15 @@ class AlmPlugin extends GenericPlugin {
 		$filter = array(STATISTICS_DIMENSION_ASSOC_TYPE => ASSOC_TYPE_GALLEY, STATISTICS_DIMENSION_SUBMISSION_ID => $articleId);
 		$orderBy = array($dateColumn => STATISTICS_ORDER_ASC);
 
-		// Consider only the last 30 days
+		// TO-DO: Consider only the last 30 days
+		/*
 		if ($byDay) {
 			$startDate = date('Ymd', strtotime('-30 days'));
 			$endDate = date('Ymd');
 			$filter[STATISTICS_DIMENSION_DAY]['from'] = $startDate;
 			$filter[STATISTICS_DIMENSION_DAY]['to'] = $endDate;
 		}
+		*/
 
 		return $metricsDao->getMetrics($metricTypes, $columns, $filter, $orderBy);
 	}
@@ -470,71 +470,23 @@ class AlmPlugin extends GenericPlugin {
 		$eventOther->events_count_by_year = $this->_getDownloadStatsByTime($byYear, 'year', STATISTICS_FILE_TYPE_OTHER);
 		$eventOther->source_id = 'other';
 
-		$response = array(
-			'pdf' => array($eventPdf),
-			'html' =>  array($eventHtml),
-			'other' => array($eventOther)
-		);
+		$response = array($eventPdf, $eventHtml, $eventOther);
 		return $response;
 	}
 
 	/**
 	 * Build the required article information for the
 	 * metrics visualization.
-	 * @param $article PublishedArticle
 	 * @param $eventsData array (optional) Decoded JSON result from Paperbuzz
 	 * @param $downloadData array (optional) Download stats data ready for JSON encoding
 	 * @return string JSON response
 	 */
-	function _buildRequiredJson($article, $eventsData = null, $downloadData = null) {
-		if ($article->getDatePublished()) {
-			$datePublished = $article->getDatePublished();
-		} else {
-			// Sometimes there is no article getDatePublished, so fallback on the issue's
-			$issueDao =& DAORegistry::getDAO('IssueDAO');  /* @var $issueDao IssueDAO */
-			$issue =& $issueDao->getIssueByArticleId($article->getId(), $article->getJournalId());
-			$datePublished = $issue->getDatePublished();
-		}
-		$metadata = array(
-			'publication_date' => date('c', strtotime($datePublished)),
-			'doi' => $article->getPubId('doi'),
-			'title' => $article->getLocalizedTitle(),
-		);
-
-		$events = array();
-		if ($eventsData) {
-			foreach ($eventsData->altmetrics_sources as $source) {
-				$eventsByDate = $source->events_count_by_day;
-				$byMonth = array();
-				$byYear = array();
-				foreach ($eventsByDate as $eventByDate) {
-					$date = $eventByDate->date;
-					$month = date('Y-m', strtotime($date));
-					$year = date('Y', strtotime($date));
-					$byMonth[$month] += $eventByDate->count;
-					$byYear[$year] += $eventByDate->count;
-				}
-				foreach ($byMonth as $date => $count) {
-					$event = new stdClass();
-					$event->count = $count;
-					$event->date = $date;
-					$source->events_count_by_month[] = $event;
-				}
-				foreach ($byYear as $date => $count) {
-					$event = new stdClass();
-					$event->count = $count;
-					$event->date = $date;
-					$source->events_count_by_year[] = $event;
-				}
-			}
-			$events = array('events' => $eventsData->altmetrics_sources);
-		}
-
-		$allData = array_merge($metadata, $events, $downloadData);
-		$response = array($allData);
-
+	function _buildRequiredJson($eventsData = null, $downloadData = null) {
+		// TO-DO: if there is no eventsData
+		$allData = array_merge($downloadData, $eventsData->altmetrics_sources);
+		$eventsData->altmetrics_sources = $allData;
 		$jsonManager = new JSONManager();
-		return $jsonManager->encode($response);
+		return $jsonManager->encode($eventsData);
 	}
 }
 
