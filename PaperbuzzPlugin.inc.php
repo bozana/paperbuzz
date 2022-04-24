@@ -365,9 +365,9 @@ class PaperbuzzPlugin extends GenericPlugin {
 
 		$columns = array(StatisticsHelper::STATISTICS_DIMENSION_FILE_TYPE, $dateColumn);
 		$filters = [
-			'contextIds' => [$context->getId()],
-			'submissionIds' => [$this->_article->getId()],
-			'assocTypes' => [Application::ASSOC_TYPE_SUBMISSION_FILE],
+			StatisticsHelper::STATISTICS_DIMENSION_CONTEXT_ID => [$context->getId()],
+			StatisticsHelper::STATISTICS_DIMENSION_SUBMISSION_ID => [$this->_article->getId()],
+			StatisticsHelper::STATISTICS_DIMENSION_ASSOC_TYPE => [Application::ASSOC_TYPE_SUBMISSION_FILE],
 		];
 		$orderBy = array($dateColumn => StatisticsHelper::STATISTICS_ORDER_ASC);
 
@@ -384,11 +384,12 @@ class PaperbuzzPlugin extends GenericPlugin {
 			// This would be for the last 30 days:
 			//$startDate = date('Ymd', strtotime('-30 days'));
 			//$endDate = date('Ymd');
-			$filters['dateStart'] = $startDate;
-			$filters['dateEnd'] = $endDate;
+			$filter[StatisticsHelper::STATISTICS_DIMENSION_DAY]['from'] = $startDate;
+			$filter[StatisticsHelper::STATISTICS_DIMENSION_DAY]['to'] = $endDate;
 		}
-
-		$metrics = Services::get('publicationStats')->getMetrics($columns, $orderBy, $filters)->toArray();
+		$statsService = Services::get('publicationStats');
+		$args = $statsService->prepareStatsArgs($filters);
+		$metrics = $statsService->getMetrics($columns, $orderBy, $args)->toArray();
 		return $metrics;
 	}
 
